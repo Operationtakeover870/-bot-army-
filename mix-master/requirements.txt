@@ -1,0 +1,6 @@
+# Nothing to install — this bot uses only Python's standard library
+# plus FFmpeg, which is already on the machine.
+#
+# If you ever move this bot to a machine without FFmpeg:
+#   Ubuntu/Debian:  sudo apt install ffmpeg
+#   macOS:          brew install ffmpeg
