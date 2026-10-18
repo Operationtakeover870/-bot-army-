@@ -10,6 +10,10 @@ Paper-trading bot built on the 5 Pillars day-trading framework. Scans pre-market
 **Bot #2 — Mix & Master Bot** (`mix-master/`)
 Feed it a finished song mix (bounce/export from BandLab, FL Studio, wherever) and it runs a professional mastering chain: sub-bass cleanup, glue compression, stereo widening, safety limiting, and two-pass loudness normalization to -14 LUFS (the Spotify/YouTube standard). You get back the mastered track plus a plain-words report of what it did. Mastering only — it polishes a finished mix, it doesn't mix individual tracks.
 
+
+**Bot #3 — Brains** (`research-bot/`)
+The research brain of the army. Ask it anything — it searches the open web across multiple angles (Wikipedia API + DuckDuckGo keyless endpoints), reads the top results, and reports back with cited sources and a research trail so you can check its work. Read-only: it never posts, sends, or changes anything.
+
 ## Doctrine
 
 See `DOCTRINE.md` for the rules every bot follows: one bot = one objective, guardrails, logging, and nothing real moves without Antonio's explicit say-so each time.
