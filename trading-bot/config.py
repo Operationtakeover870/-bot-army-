@@ -8,10 +8,10 @@ PAPER TRADING ONLY — this bot never touches real money.
 PAPER_API_BASE_URL = "https://paper-api.alpaca.markets"
 DATA_API_BASE_URL = "https://data.alpaca.markets"
 
-# --- Mode: "simulation" (default, needs no keys) or "alpaca_paper" ---
+# --- Mode: "simulation" (needs no keys) or "alpaca_paper" ---
 # "alpaca_paper" still never uses real money — it uses Alpaca's free
 # paper-trading account. It needs ALPACA_API_KEY and ALPACA_API_SECRET set.
-MODE = "simulation"
+MODE = "alpaca_paper"
 
 # --- Strategy: the 5 Pillars (from the day-trading study notes) ---
 MIN_RELATIVE_VOLUME = 5.0      # Pillar 1: volume >= 5x the stock's average
