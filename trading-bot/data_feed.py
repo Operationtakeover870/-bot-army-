@@ -109,6 +109,28 @@ class SimulationFeed(MarketDataFeed):
         self.rng = random.Random(seed)
         self.scenarios: dict[str, str] = {}
 
+    def _synthetic_closes(self, prev_close: float, price: float) -> list[float]:
+        """Fake pre-market price history (oldest -> newest) for indicator
+        confirmation in simulation. 28 bars of chop around the previous
+        close, then a 12-bar staircase climb (up bars with pullbacks) into
+        the current price — every value invented, like the rest of the demo.
+        """
+        closes: list[float] = []
+        p = prev_close
+        for _ in range(28):
+            p *= 1 + self.rng.uniform(-0.02, 0.02)
+            closes.append(round(max(p, 0.01), 2))
+        start = closes[-1]
+        total = price - start
+        steps = [0.013, 0.009, -0.004] * 4
+        denom = start * sum(steps)
+        scale = total / denom if denom else 0.0
+        for s in steps:
+            p = closes[-1] * (1 + s * scale)
+            closes.append(round(max(p, 0.01), 2))
+        closes[-1] = price
+        return closes
+
     def _demo_candidates(self) -> list[Candidate]:
         demo = [
             # (symbol, prev_close, gap_pct, rel_vol, float_M, catalyst, scenario)
@@ -135,6 +157,7 @@ class SimulationFeed(MarketDataFeed):
                 news_catalyst=news,
                 premarket_high=pm_high,
                 premarket_low=pm_low,
+                closes=self._synthetic_closes(prev, price),
             ))
         return out
 
