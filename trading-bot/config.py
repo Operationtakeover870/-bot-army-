@@ -25,6 +25,22 @@ MAX_FLOAT_SHARES = 10_000_000  # Pillar 5: float under ~10M shares
 PREMARKET_MIN_GAP_PCT = 4.0    # gapping up at least 4% pre-market
 PREMARKET_MIN_SHARES = 100_000 # with at least 100K pre-market shares traded
 
+# --- Technical indicator confirmation filters (Day Trading Overview study) ---
+# The 5 Pillars stay the primary gate; these confirm entries when enough
+# price history exists. All are vetoes: one fail = no trade.
+IND_RSI_PERIOD = 14
+IND_RSI_MIN = 45.0             # veto below: momentum fading, don't chase it
+IND_RSI_MAX = 80.0             # veto above: parabolic exhaustion (Cameron-style
+                               # momentum wants strength, not a vertical blow-off)
+IND_MACD_FAST = 12
+IND_MACD_SLOW = 26
+IND_MACD_SIGNAL = 9            # require MACD line > signal line (bullish)
+IND_SMA_PERIOD = 20            # require price above SMA(20) (uptrend)
+IND_BB_PERIOD = 20
+IND_BB_STD = 2.0
+IND_BB_MIN_BANDWIDTH = 0.06    # veto "squeeze" chop below 6% bandwidth
+IND_MIN_BARS = 35              # bars needed before confirmation runs
+
 # --- Risk: HARD RULES. The risk manager enforces these; nothing overrides them. ---
 MAX_RISK_PER_TRADE = 50.0      # never risk more than $50 on one trade
 PROFIT_TARGET_PER_TRADE = 100.0  # aim to make $100 per trade (2:1 reward:risk)
