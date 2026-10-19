@@ -9,6 +9,13 @@ THE 5 PILLARS — a stock must pass ALL five to be a trade candidate:
   4. Price between $2 and $20
   5. Float under ~10M shares
 
+INDICATOR CONFIRMATION (Day Trading Overview study material):
+  The 5 Pillars stay the PRIMARY gate. A survivor then gets its entry
+  confirmed by momentum/trend/volatility filters (RSI, MACD, SMA,
+  Bollinger — see indicators.py). A veto kills the signal. When there
+  isn't enough price history (fewer than IND_MIN_BARS bars), the bot
+  trades on the Pillars alone and logs that confirmation was skipped.
+
 GAP AND GO ENTRY:
   - Stock gapped up pre-market on news and passes the 5 Pillars.
   - Buy the break above the pre-market high (or the first 1-minute
@@ -22,6 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import config
+import indicators
 
 
 @dataclass
@@ -37,6 +45,8 @@ class Candidate:
     news_catalyst: str = ""      # description of the news, "" = none found
     premarket_high: float = 0.0
     premarket_low: float = 0.0
+    closes: list[float] = field(default_factory=list)  # oldest -> newest
+    indicator_checks: list = field(default_factory=list)  # filled on confirm
 
 
 @dataclass
@@ -119,6 +129,10 @@ def gap_and_go_signal(c: Candidate) -> Signal | None:
     Entry = pre-market high. Stop = pre-market low (the breakout candle's
     low — if price falls back under it, the breakout failed).
     Target = entry + 2 * risk distance (2:1 reward-to-risk).
+
+    Indicator confirmation: with enough price history, RSI/MACD/SMA/
+    Bollinger must all confirm; any veto returns None. The checks are
+    stored on c.indicator_checks for logging.
     """
     if c.premarket_high <= 0 or c.premarket_low <= 0:
         return None
@@ -131,6 +145,13 @@ def gap_and_go_signal(c: Candidate) -> Signal | None:
     shares, planned_risk = position_size(entry, stop)
     if shares <= 0:
         return None
+
+    if len(c.closes) >= config.IND_MIN_BARS:
+        c.indicator_checks = indicators.confirm_entry(c.closes)
+        if not indicators.all_confirmed(c.indicator_checks):
+            return None
+    # else: not enough history — trade on the 5 Pillars alone.
+
     return Signal(
         symbol=c.symbol,
         entry=entry,
