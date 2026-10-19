@@ -3,8 +3,9 @@
 One run = one simulated (or Alpaca paper) morning session:
   1. Scan pre-market candidates.
   2. Filter through the 5 Pillars (fail-closed).
-  3. Build Gap-and-Go plans for survivors.
-  4. Risk-manager gate on every trade.
+  3. Build Gap-and-Go plans for survivors (with indicator confirmation
+     when price history is available).
+  4. Risk-manager gate on every trade (hard rules + signal validation).
   5. Execute via the configured executor (simulation by default).
   6. Log everything; halt for the day when a hard rule trips.
 
@@ -81,7 +82,13 @@ def run_session(mode: str, watchlist: list[str] | None,
             break
         signal = gap_and_go_signal(c)
         if signal is None:
-            log.log(f"{c.symbol}: no clean Gap-and-Go setup — skipped")
+            veto = ""
+            if c.indicator_checks:
+                failed = [chk.name for chk in c.indicator_checks
+                          if not chk.passed]
+                if failed:
+                    veto = f" — indicator veto: {', '.join(failed)}"
+            log.log(f"{c.symbol}: no clean Gap-and-Go setup{veto} — skipped")
             continue
         log.log(f"{c.symbol}: SIGNAL entry ${signal.entry:.2f} | "
                 f"stop ${signal.stop:.2f} | target ${signal.target:.2f} | "
@@ -90,6 +97,13 @@ def run_session(mode: str, watchlist: list[str] | None,
         allowed, why = risk.can_open_trade(signal.planned_risk)
         if not allowed:
             log.log(f"{c.symbol}: BLOCKED by risk manager — {why}")
+            continue
+
+        ok, reasons = risk.validate_signal(
+            signal.entry, signal.stop, signal.target, signal.planned_risk)
+        if not ok:
+            log.log(f"{c.symbol}: BLOCKED by risk validation — "
+                    f"{'; '.join(reasons)}")
             continue
 
         fill = executor.place_bracket(signal)
