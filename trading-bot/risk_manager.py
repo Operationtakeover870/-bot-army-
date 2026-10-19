@@ -5,6 +5,10 @@ From the study notes (Ch. 5):
   - Daily max loss -$100 -> done for the day.
   - 3 losing trades in a row -> done for the day.
 
+From the Day Trading Overview study material:
+  - Automatic stop-loss / take-profit levels on every trade.
+  - Position sizing tied to the max-risk rule.
+
 When any limit hits, the bot stops trading for the day and logs why.
 """
 
@@ -66,6 +70,46 @@ class RiskManager:
             )
             return f"HALT: {self.halt_reason}"
         return ""
+
+    def position_size(self, entry: float, stop: float) -> tuple[int, float]:
+        """Canonical sizer: shares = floor(max_risk / (entry - stop)).
+
+        Planned risk can never exceed max_risk_per_trade. Minimum 1 share.
+        Returns (shares, planned_risk_dollars).
+        """
+        risk_per_share = entry - stop
+        if risk_per_share <= 0:
+            return 0, 0.0
+        shares = int(self.max_risk_per_trade // risk_per_share)
+        shares = max(shares, 1)
+        return shares, round(shares * risk_per_share, 2)
+
+    def validate_signal(self, entry: float, stop: float, target: float,
+                        planned_risk: float) -> tuple[bool, list[str]]:
+        """Pre-trade structural checks on a planned bracket.
+
+        Verifies the automatic stop-loss / take-profit levels make sense:
+        stop below entry, target above entry, reward:risk >= 2:1, and
+        planned risk within the per-trade maximum.
+        Returns (ok, [reasons]) — reasons is empty when ok.
+        """
+        reasons: list[str] = []
+        if not stop < entry:
+            reasons.append(
+                f"stop ${stop:.2f} must be below entry ${entry:.2f}")
+        if not target > entry:
+            reasons.append(
+                f"target ${target:.2f} must be above entry ${entry:.2f}")
+        if stop < entry:
+            reward_risk = (target - entry) / (entry - stop)
+            if round(reward_risk, 4) < 2.0:  # rounded: float dust ignored
+                reasons.append(
+                    f"reward:risk {reward_risk:.2f} below 2:1 minimum")
+        if planned_risk > self.max_risk_per_trade + 1e-9:
+            reasons.append(
+                f"planned risk ${planned_risk:.2f} exceeds "
+                f"${self.max_risk_per_trade:.2f} max per trade")
+        return (len(reasons) == 0), reasons
 
     def summary(self) -> str:
         return (
