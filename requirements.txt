@@ -1,0 +1,2 @@
+# Clip Bot has zero pip dependencies — Python 3 standard library only.
+# System requirement: ffmpeg + ffprobe on PATH (https://ffmpeg.org/download/).
