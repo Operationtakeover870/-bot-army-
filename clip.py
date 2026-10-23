@@ -159,12 +159,19 @@ def fmt(t):
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
-def cut(path, start, end, out_path):
-    vf = (f"scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,"
-          f"crop={OUT_W}:{OUT_H}")
+def cut(path, start, end, out_path, style="blur"):
+    if style == "zoom":
+        vf = (f"scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,"
+              f"crop={OUT_W}:{OUT_H}")
+    else:  # blur fill: full picture centered on blurred background
+        vf = (f"split=2[bg][fg];[bg]scale={OUT_W}:{OUT_H}:"
+              f"force_original_aspect_ratio=increase,crop={OUT_W}:{OUT_H},"
+              f"gblur=sigma=40[bg2];[fg]scale={OUT_W}:-2[fg2];"
+              f"[bg2][fg2]overlay=(W-w)/2:(H-h)/2")
     run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
          "-ss", f"{start:.2f}", "-i", path, "-t", f"{end - start:.2f}",
-         "-vf", vf, "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+         "-filter_complex" if style != "zoom" else "-vf", vf,
+         "-c:v", "libx264", "-preset", "fast", "-crf", "23",
          "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
          "-movflags", "+faststart", out_path])
 
@@ -180,6 +187,8 @@ def main():
     ap.add_argument("--cut", action="append", default=[],
                     help="manual range like 2:14-2:40 (repeatable)")
     ap.add_argument("--top", type=int, default=3, help="max auto clips (default 3)")
+    ap.add_argument("--zoom", action="store_true",
+                    help="center-crop zoom style instead of default blur-fill")
     args = ap.parse_args()
 
     src = args.input
@@ -224,11 +233,12 @@ def main():
 
     os.makedirs(args.out, exist_ok=True)
     made = []
+    style = "zoom" if args.zoom else "blur"
     for i, (s, e, _) in enumerate(jobs, 1):
         name = f"clip_{i:02d}_{fmt(s).replace(':', '')}-{fmt(e).replace(':', '')}.mp4"
         out_path = os.path.join(args.out, name)
         print(f"Cutting {i}/{len(jobs)} -> {out_path} ...")
-        cut(src, s, e, out_path)
+        cut(src, s, e, out_path, style=style)
         made.append(out_path)
 
     print(f"\nDone — {len(made)} vertical clip(s) in {args.out}/")
