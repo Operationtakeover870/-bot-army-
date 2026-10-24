@@ -1,62 +1,40 @@
-# Bot #4 — Clip Bot
+# Show Bot (Bot #5)
 
-The viral content machine of the bot army. Two jobs, one bot:
+Prompt in, animated episode out. Antonio's own show studio — no subscription, no credits meter.
 
-**Job A — Viral Scout.** Every morning it hunts for trending video content
-worth posting or reacting to: funny clips, wild moments, trending memes,
-skit-worthy scenes. Delivers a short digest: what it is, the link, why it's
-blowing up right now, and an angle for Antonio's own post.
+## How it works
 
-**Job B — Clipper.** Takes a long video and cuts it into vertical 9:16
-shorts ready for TikTok, Reels, and Shorts.
+1. **Premise** — Antonio gives ICE a concept ("a funny episode about two roommates fighting over pizza").
+2. **Script** — ICE writes the episode: scenes with dialogue, narrator lines, comedic timing.
+3. **Scenes** — AI-generated cartoon visuals, one per scene (16:9).
+4. **Voices** — each character gets a distinct voice via TTS; narrator sets the tone.
+5. **Assemble** — `assemble.py` brings it together: Ken Burns motion on every scene
+   (slow zoom / pan, cycled so it never feels static), dialogue timed to visuals,
+   scenes concatenated into one 1280x720 MP4.
 
-One bot, one objective: keep Antonio's posting pipeline fed — find what's
-hot, cut what's long.
+## Files
 
-## Run it — Clipper
+- `assemble.py` — the assembly engine. Takes a manifest JSON:
+  ```json
+  {
+    "title": "Episode Title",
+    "output": "episode.mp4",
+    "scenes": [
+      {"image": "scene1.png", "audio": "scene1.mp3"},
+      {"image": "scene2.png", "audio": "scene2.mp3"}
+    ]
+  }
+  ```
+  Run: `python3 assemble.py manifest.json`
+- `ep1/` — proof-of-concept episode: "The Last Slice" (46s, 3 scenes).
 
-Needs ffmpeg on PATH. No pip packages.
+## Workflow
 
-```bash
-# Preview the auto-detected best moments (cuts nothing)
-python3 clip.py longvideo.mp4 --suggest
+Nothing for Antonio to install. He sends a premise in chat → ICE writes, voices,
+draws, and assembles → the episode comes back in chat, ready to post.
 
-# Auto-cut the 3 loudest moments into vertical shorts
-python3 clip.py longvideo.mp4 --auto
+## Notes
 
-# Cut exact ranges (timestamps like 2:14 or plain seconds)
-python3 clip.py longvideo.mp4 --cut 2:14-2:40 --cut 5:00-5:30
-```
-
-Clips land in `clips/` as 720x1280 MP4s, ~15–45 seconds each, audio kept.
-
-## How the auto-cut works
-
-1. Reads the audio's momentary loudness (ebur128) across the whole video.
-2. Finds peaks sitting well above the video's own baseline — laughs,
-   reactions, exclamations, beat drops.
-3. Cuts a ~30 second window around each peak, center-cropped to vertical 9:16.
-4. No usable audio? Falls back to even splits so it never comes back empty.
-
-## Run it — Scout
-
-The scout is an agent runbook, not a script: `scout/SCOUT.md`. The morning
-agent follows it — searches social + web for what's actually trending,
-checks traction signals, and writes the digest in `scout/digest-template.md`
-format. Proposed schedule: daily ~8:30 AM CT (before the 9:30 trading
-keys nudge). Cron not created yet — Antonio confirms timing first.
-
-## Limits
-
-- Auto-cut finds *loud* moments, not *funny* moments. A quiet punchline can
-  slip past it — that's what `--suggest` + your eyes are for.
-- No captions in v1. Clips come out clean, ready for TikTok's auto-captions.
-- Scout reports what it finds with links; it never downloads or re-uploads
-  anyone's content. Angles lean toward react/duet/recreate, not straight repost.
-- Free tier only: no paid APIs anywhere in this bot.
-
-## Doctrine
-
-Follows `DOCTRINE.md`: one objective, guardrails, visible trail instead of a
-black box, and nothing real moves — this bot finds and cuts; Antonio decides
-what gets posted.
+- Pure stdlib + ffmpeg + TTS + image generation. Zero marginal cost per episode.
+- Style is animated-cartoon, not photoreal — same lane as Showrunner, owned outright.
+- Episode length scales with the script: more scenes = longer episode.
