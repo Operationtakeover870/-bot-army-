@@ -10,10 +10,12 @@ One run = one simulated (or Alpaca paper) morning session:
   6. Log everything; halt for the day when a hard rule trips.
 
 Usage:
-    python3 bot.py                      # simulation mode, demo candidates
-    python3 bot.py --watchlist file.json # simulation mode, your candidates
+    python3 bot.py                      # Alpaca paper (needs API keys in env)
+    python3 bot.py --mode simulation    # fake demo candidates, no keys
+    python3 bot.py --watchlist file.json # (simulation) your candidates
     python3 bot.py --mode alpaca --watchlist SYM1 SYM2
-                                        # Alpaca paper (needs API keys in env)
+                                        # Alpaca paper, your symbols instead
+                                        # of the built-in default watchlist
 
 PAPER TRADING ONLY. Nothing here can place a real-money order.
 """
@@ -122,8 +124,12 @@ def run_session(mode: str, watchlist: list[str] | None,
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="5-Pillars paper trading bot")
+    # config.MODE is "alpaca_paper"/"simulation"; argparse choices are
+    # "alpaca"/"simulation" — map it (plain `python3 bot.py` used to crash
+    # on the unmapped default).
+    default_mode = "alpaca" if config.MODE == "alpaca_paper" else "simulation"
     parser.add_argument("--mode", choices=["simulation", "alpaca"],
-                        default=config.MODE,
+                        default=default_mode,
                         help="simulation = fake data, no keys (default); "
                              "alpaca = Alpaca paper account (needs API keys)")
     parser.add_argument("--watchlist", nargs="*",

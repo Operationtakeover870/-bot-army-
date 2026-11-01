@@ -43,12 +43,35 @@ history so the confirmation path exercises in simulation.
 - **Timothy Sykes** — pattern recognition and education: the journaled,
   logged, reviewable session structure (logs/ + "journal what happened").
 
+## Chances revision (Nov 1, 2026 — Antonio: "they gotta take chances")
+The bot sat flat for weeks because the strict gates could never pass
+on free Alpaca data: the feed hardcoded relative_volume=0.0, float=None,
+and news="", so Pillars 1, 3, and 5 failed every candidate, and there
+was no default scan universe (an empty --watchlist meant zero
+candidates). Changes, all paper-only:
+- Gates relaxed to what free data can measure: rel vol >= 2x (computed
+  from daily bars), up >= 5%, price $1-$30. Strict values preserved in
+  config comments and strategy.py docstring.
+- News: Alpaca news API attempted best-effort; headline logged when
+  found, but no longer a veto.
+- Float: advisory only (not in free data) — logged, never a veto.
+- Feed now pulls daily bars (avg volume + closes history) so indicator
+  confirmation can actually run — but confirmation is ADVISORY in the
+  chances tier (IND_CONFIRM_VETO=False): checks are logged, they don't
+  veto, because on realistic choppy closes the old vetoes still blocked
+  trades. The risk cage is the protection now.
+- Default watchlist (~50 liquid tickers) in config.DEFAULT_WATCHLIST;
+  override with --watchlist.
+- Fixed: plain `python3 bot.py` crashed on the unmapped --mode default.
+UNCHANGED: $50/trade max, -$100 daily halt, 3-loss halt, 2:1
+validation, paper-only executor, session window.
+
 ## Future work (NOT implemented)
 - **Machine learning** — no ML dependencies added (money is tight; nothing
   to install, nothing to pay for). Would need a training/validation loop
   over logged trades first.
-- **News sentiment analysis** — no news API keys. Pillar 3 (news catalyst)
-  is still a human-supplied/verifiable field; rumor spikes fail closed.
+- **News sentiment analysis** — no sentiment scoring. The feed now pulls
+  Alpaca headlines best-effort, but headlines are logged only, not scored.
 
 ## Hard constraints (non-negotiable, unchanged)
 - Paper endpoints only. The executor hard-codes

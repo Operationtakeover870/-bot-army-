@@ -32,11 +32,18 @@ class MarketDataFeed(ABC):
 class AlpacaFeed(MarketDataFeed):
     """Real market data from Alpaca (paper/free tier).
 
-    NOTE: Alpaca's free data has no built-in gap screener and no float
-    field, so this feed checks a watchlist of symbols you supply and
-    marks float as unknown (the 5-Pillars check fails closed on it —
-    see README "Limitations"). Plug in a screener or fundamentals
-    source later to fill those gaps.
+    CHANCES REVISION (Nov 1, 2026): the old feed hardcoded
+    relative_volume=0.0, float=None, and news="" — which made Pillars
+    1, 3, and 5 fail every candidate, so the bot never traded. This
+    version measures what free data CAN supply:
+      - relative volume: today's volume vs. the 20-day average from
+        daily bars (feed=iex, free tier).
+      - closes history: daily closes from the same bars, so indicator
+        confirmation (RSI/MACD/SMA/Bollinger) can actually run.
+      - news: best-effort Alpaca news API headline; "" when the call
+        fails or finds nothing (news is advisory, not a veto).
+    Float is still not in free Alpaca data — it stays unknown and is
+    logged as a warning, not a veto (see config.FLOAT_VETO).
     """
 
     def __init__(self, watchlist: list[str] | None = None):
@@ -47,7 +54,7 @@ class AlpacaFeed(MarketDataFeed):
                 "AlpacaFeed needs ALPACA_API_KEY and ALPACA_API_SECRET "
                 "environment variables. Use simulation mode instead."
             )
-        self.watchlist = watchlist or []
+        self.watchlist = watchlist or list(config.DEFAULT_WATCHLIST)
         self.headers = {
             "APCA-API-KEY-ID": self.api_key,
             "APCA-API-SECRET-KEY": self.api_secret,
@@ -58,6 +65,45 @@ class AlpacaFeed(MarketDataFeed):
         r = requests.get(url, headers=self.headers, params=params or {}, timeout=15)
         r.raise_for_status()
         return r.json()
+
+    def _get_bars(self, symbol: str) -> tuple[list[float], float]:
+        """Daily bars -> (closes oldest->newest, avg volume of prior days).
+
+        Returns ([], 0.0) when bars are unavailable; the caller then
+        treats relative volume as unknown (pillar fails honestly).
+        """
+        try:
+            data = self._get(f"/stocks/{symbol}/bars", {
+                "timeframe": "1Day", "limit": 50, "feed": "iex",
+            })
+            bars = data.get("bars", []) or []
+            if not bars:
+                return [], 0.0
+            closes = [float(b.get("c", 0) or 0) for b in bars]
+            volumes = [float(b.get("v", 0) or 0) for b in bars]
+            prior_volumes = volumes[:-1] if len(volumes) > 1 else volumes
+            avg_volume = (sum(prior_volumes) / len(prior_volumes)
+                          if prior_volumes else 0.0)
+            return closes, avg_volume
+        except Exception as e:  # bars are a bonus, not a reason to die
+            print(f"[feed] bars unavailable for {symbol}: {e}")
+            return [], 0.0
+
+    def _get_news_headline(self, symbol: str) -> str:
+        """Best-effort: latest Alpaca news headline for the symbol."""
+        try:
+            url = f"{config.DATA_API_BASE_URL}/v1beta1/news"
+            r = requests.get(url, headers=self.headers,
+                             params={"symbols": symbol, "limit": 3,
+                                     "sort": "desc"},
+                             timeout=15)
+            r.raise_for_status()
+            news = r.json().get("news", []) or []
+            if news:
+                return str(news[0].get("headline", "") or "")
+        except Exception as e:
+            print(f"[feed] news unavailable for {symbol}: {e}")
+        return ""
 
     def get_premarket_candidates(self) -> list[Candidate]:
         candidates: list[Candidate] = []
@@ -77,17 +123,21 @@ class AlpacaFeed(MarketDataFeed):
                     day_gain_pct >= config.PREMARKET_MIN_GAP_PCT
                     and premarket_shares >= config.PREMARKET_MIN_SHARES
                 ):
+                    closes, avg_volume = self._get_bars(symbol)
+                    relative_volume = (volume / avg_volume
+                                       if avg_volume > 0 else 0.0)
                     candidates.append(Candidate(
                         symbol=symbol,
                         price=price,
                         prev_close=prev_close,
                         day_gain_pct=day_gain_pct,
-                        relative_volume=0.0,  # needs average-volume history; unknown here
+                        relative_volume=relative_volume,
                         premarket_shares=premarket_shares,
-                        float_shares=None,   # not in free Alpaca data; fails closed
-                        news_catalyst="",
+                        float_shares=None,   # not in free Alpaca data; advisory only
+                        news_catalyst=self._get_news_headline(symbol),
                         premarket_high=float(daily.get("h", price) or price),
                         premarket_low=float(daily.get("l", price) or price),
+                        closes=closes,
                     ))
             except Exception as e:  # one bad symbol must not kill the scan
                 print(f"[feed] skipping {symbol}: {e}")

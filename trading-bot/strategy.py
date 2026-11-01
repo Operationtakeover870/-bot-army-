@@ -9,6 +9,15 @@ THE 5 PILLARS — a stock must pass ALL five to be a trade candidate:
   4. Price between $2 and $20
   5. Float under ~10M shares
 
+CHANCES REVISION (Nov 1, 2026): Antonio directed the bot to take
+chances after it sat flat for weeks — the strict gates could never
+pass on free Alpaca data (no float field, no wired news source,
+relative volume hardcoded 0.0). The live gates in config.py are now
+what free data can measure: rel vol >= 2x, up >= 5%, price $1-$30,
+news and float advisory (logged, not vetoes). The strict values above
+stay documented here and in config comments. The RISK cage never moved:
+$50/trade max, -$100 daily halt, 3-loss halt, paper only.
+
 INDICATOR CONFIRMATION (Day Trading Overview study material):
   The 5 Pillars stay the PRIMARY gate. A survivor then gets its entry
   confirmed by momentum/trend/volatility filters (RSI, MACD, SMA,
@@ -61,14 +70,14 @@ def check_five_pillars(c: Candidate) -> list[PillarResult]:
     results = []
 
     results.append(PillarResult(
-        "1. Relative volume >= 5x",
+        f"1. Relative volume >= {config.MIN_RELATIVE_VOLUME}x",
         c.relative_volume >= config.MIN_RELATIVE_VOLUME,
         f"relative volume {c.relative_volume:.1f}x "
         f"(needs >= {config.MIN_RELATIVE_VOLUME}x)",
     ))
 
     results.append(PillarResult(
-        "2. Up >= 10% on the day",
+        f"2. Up >= {config.MIN_DAY_GAIN_PCT}% on the day",
         c.day_gain_pct >= config.MIN_DAY_GAIN_PCT,
         f"up {c.day_gain_pct:.1f}% (needs >= {config.MIN_DAY_GAIN_PCT}%)",
     ))
@@ -77,21 +86,30 @@ def check_five_pillars(c: Candidate) -> list[PillarResult]:
     results.append(PillarResult(
         "3. Real news catalyst",
         has_catalyst,
-        f"catalyst: {c.news_catalyst or 'NONE FOUND — rumor spikes are skipped'}",
+        f"catalyst: {c.news_catalyst or 'NONE FOUND — trading without it (chances tier)'}",
     ))
 
     results.append(PillarResult(
-        "4. Price $2-$20",
+        f"4. Price ${config.MIN_PRICE:.0f}-${config.MAX_PRICE:.0f}",
         config.MIN_PRICE <= c.price <= config.MAX_PRICE,
         f"price ${c.price:.2f} (needs ${config.MIN_PRICE:.0f}-${config.MAX_PRICE:.0f})",
     ))
 
-    float_ok = c.float_shares is not None and c.float_shares <= config.MAX_FLOAT_SHARES
+    if config.FLOAT_VETO:
+        float_ok = c.float_shares is not None and c.float_shares <= config.MAX_FLOAT_SHARES
+        float_detail = (f"float {c.float_shares / 1e6:.1f}M" if c.float_shares
+                        else "float UNKNOWN — failed closed (no trade without it)")
+    else:
+        # Chances tier: float is advisory only — free Alpaca data has no
+        # float field, so vetoing on it would block every trade forever.
+        float_ok = True
+        float_detail = (f"float {c.float_shares / 1e6:.1f}M (advisory)"
+                        if c.float_shares
+                        else "float UNKNOWN — trading without it (chances tier)")
     results.append(PillarResult(
-        "5. Float under ~10M",
+        "5. Float (advisory)",
         float_ok,
-        f"float {c.float_shares / 1e6:.1f}M" if c.float_shares
-        else "float UNKNOWN — failed closed (no trade without it)",
+        float_detail,
     ))
 
     return results
@@ -131,8 +149,10 @@ def gap_and_go_signal(c: Candidate) -> Signal | None:
     Target = entry + 2 * risk distance (2:1 reward-to-risk).
 
     Indicator confirmation: with enough price history, RSI/MACD/SMA/
-    Bollinger must all confirm; any veto returns None. The checks are
-    stored on c.indicator_checks for logging.
+    Bollinger checks run and are stored on c.indicator_checks for
+    logging. They VETO the signal only when config.IND_CONFIRM_VETO
+    is True; in the chances tier (default) they are advisory — the
+    risk cage ($50/trade, daily halt, loss halt) is the protection.
     """
     if c.premarket_high <= 0 or c.premarket_low <= 0:
         return None
@@ -148,9 +168,9 @@ def gap_and_go_signal(c: Candidate) -> Signal | None:
 
     if len(c.closes) >= config.IND_MIN_BARS:
         c.indicator_checks = indicators.confirm_entry(c.closes)
-        if not indicators.all_confirmed(c.indicator_checks):
+        if config.IND_CONFIRM_VETO and not indicators.all_confirmed(c.indicator_checks):
             return None
-    # else: not enough history — trade on the 5 Pillars alone.
+    # else: not enough history — trade on the Pillars alone.
 
     return Signal(
         symbol=c.symbol,
